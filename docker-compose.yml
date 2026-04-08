@@ -1,0 +1,55 @@
+# ── How to run ────────────────────────────────────────────────────────────────
+#   1. cp .env.example .env
+#   2. Edit .env — add your Groq
+#   3. docker compose up --build
+#   4. Open http://localhost:3000
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hipaa_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_PATH: /app/data/deidentification.db
+      LOG_LEVEL: INFO
+      # Override CORS origins to allow the frontend container
+      CORS_ORIGINS: "http://localhost:3001,http://frontend:80"
+    volumes:
+      - db_data:/app/data
+    ports:
+      - "8001:8000"
+    networks:
+      - hipaa_net
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')\""]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hipaa_frontend
+    restart: unless-stopped
+    ports:
+      - "3001:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - hipaa_net
+
+volumes:
+  db_data:
+    driver: local
+
+networks:
+  hipaa_net:
+    driver: bridge
